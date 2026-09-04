@@ -1,151 +1,228 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const steps = [
   "Loading website",
-  "Capturing interface",
-  "Checking accessibility",
-  "Analyzing visual hierarchy",
-  "Evaluating conversion paths",
-  "Generating recommendations",
+  "Reading page structure",
+  "Inspecting content",
+  "Counting interface elements",
+  "Preparing audit data",
 ];
 
 export default function AnalyzingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const websiteUrl = searchParams.get("url") || "";
+
   const [currentStep, setCurrentStep] = useState(0);
+  const [error, setError] = useState("");
+
+  let websiteName = "your website";
+
+  try {
+    websiteName = new URL(websiteUrl).hostname.replace("www.", "");
+  } catch {
+    websiteName = "your website";
+  }
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentStep((current) => {
-        if (current >= steps.length - 1) {
-          clearInterval(interval);
+    if (!websiteUrl) {
+      router.replace("/");
+      return;
+    }
 
-          setTimeout(() => {
-            router.push("/results");
-          }, 1000);
+    async function analyzeWebsite() {
+      try {
+        setCurrentStep(0);
 
-          return current;
+        const stepTimer = setInterval(() => {
+          setCurrentStep((step) => {
+            if (step >= steps.length - 1) {
+              return step;
+            }
+
+            return step + 1;
+          });
+        }, 800);
+
+        const response = await fetch("/api/analyze", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            url: websiteUrl,
+          }),
+        });
+
+        const result = await response.json();
+
+        clearInterval(stepTimer);
+
+        if (!response.ok || !result.success) {
+          throw new Error(
+            result.error || "Website analysis failed."
+          );
         }
 
-        return current + 1;
-      });
-    }, 900);
+        setCurrentStep(steps.length);
 
-    return () => clearInterval(interval);
-  }, [router]);
+        sessionStorage.setItem(
+          "uxlens-analysis",
+          JSON.stringify(result.data)
+        );
 
-  const progress = Math.round(
-    ((currentStep + 1) / steps.length) * 100
-  );
+        setTimeout(() => {
+          router.push(
+            `/results?url=${encodeURIComponent(websiteUrl)}`
+          );
+        }, 700);
+      } catch (error) {
+        console.error(error);
+
+        setError(
+          error instanceof Error
+            ? error.message
+            : "Something went wrong."
+        );
+      }
+    }
+
+    analyzeWebsite();
+  }, [router, websiteUrl]);
+
+  const progress =
+    currentStep >= steps.length
+      ? 100
+      : Math.round(
+          ((currentStep + 1) / steps.length) * 100
+        );
 
   return (
-    <main className="min-h-screen bg-[#fafafa] px-6 py-20 text-[#111111]">
-      <div className="mx-auto max-w-2xl">
-        <div className="mb-12">
-          <p className="text-xl font-semibold">
-            UX<span className="text-indigo-600">Lens</span>
-          </p>
+    <main className="min-h-screen bg-white text-zinc-950">
+      <nav className="border-b border-zinc-200">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
+          <div className="text-xl font-bold tracking-tight">
+            UXLens
+          </div>
+
+          <div className="text-sm text-zinc-500">
+            Live website analysis
+          </div>
+        </div>
+      </nav>
+
+      <section className="mx-auto flex min-h-[80vh] max-w-3xl flex-col justify-center px-6 py-20">
+        <div className="mb-4 text-sm font-medium text-zinc-500">
+          Analyzing
         </div>
 
-        <p className="text-sm text-neutral-500">UX Audit</p>
+        <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
+          Looking closely at
+          <br />
 
-        <h1 className="mt-3 text-4xl font-semibold tracking-tight">
-          Analyzing your website
+          <span className="text-zinc-400">
+            {websiteName}
+          </span>
         </h1>
 
-        <p className="mt-4 leading-7 text-neutral-600">
-          We’re reviewing usability, accessibility, navigation,
-          visual hierarchy, and conversion opportunities.
+        <p className="mt-5 max-w-xl text-lg leading-8 text-zinc-600">
+          UXLens is opening the real website and inspecting its
+          interface and page structure.
         </p>
 
-        <div className="mt-8">
-          <div className="flex justify-between text-sm">
-            <span className="text-neutral-500">
-              Analysis progress
-            </span>
+        {!error && (
+          <>
+            <div className="mt-12">
+              <div className="mb-3 flex items-center justify-between text-sm">
+                <span className="font-medium">
+                  Website analysis
+                </span>
 
-            <span className="font-medium">
-              {progress}%
-            </span>
-          </div>
+                <span className="text-zinc-500">
+                  {progress}%
+                </span>
+              </div>
 
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-neutral-200">
-            <div
-              className="h-full rounded-full bg-indigo-600 transition-all duration-500"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        </div>
-
-        <div className="mt-10 rounded-3xl border bg-white p-8 shadow-xl shadow-black/5">
-          <div className="space-y-6">
-            {steps.map((step, index) => {
-              const status =
-                index < currentStep
-                  ? "done"
-                  : index === currentStep
-                    ? "active"
-                    : "waiting";
-
-              return (
-                <Step
-                  key={step}
-                  label={step}
-                  status={status}
+              <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
+                <div
+                  className="h-full rounded-full bg-black transition-all duration-500"
+                  style={{
+                    width: `${progress}%`,
+                  }}
                 />
-              );
-            })}
-          </div>
-        </div>
+              </div>
+            </div>
 
-        <p className="mt-6 text-center text-sm text-neutral-400">
-          Please keep this page open while we analyze your experience.
-        </p>
-      </div>
-    </main>
-  );
-}
+            <div className="mt-10 space-y-3">
+              {steps.map((step, index) => {
+                const isComplete =
+                  currentStep > index ||
+                  currentStep >= steps.length;
 
-function Step({
-  label,
-  status,
-}: {
-  label: string;
-  status: "done" | "active" | "waiting";
-}) {
-  return (
-    <div className="flex items-center gap-4">
-      <div
-        className={`flex h-8 w-8 items-center justify-center rounded-full text-sm transition-all ${
-          status === "done"
-            ? "bg-black text-white"
-            : status === "active"
-              ? "bg-indigo-100 text-indigo-700"
-              : "bg-neutral-100 text-neutral-400"
-        }`}
-      >
-        {status === "done" ? "✓" : status === "active" ? "●" : "○"}
-      </div>
+                const isCurrent =
+                  index === currentStep &&
+                  currentStep < steps.length;
 
-      <div>
-        <p
-          className={
-            status === "waiting"
-              ? "text-neutral-400"
-              : "text-neutral-900"
-          }
-        >
-          {label}
-        </p>
+                return (
+                  <div
+                    key={step}
+                    className={`flex items-center gap-4 rounded-2xl border p-4 ${
+                      isCurrent
+                        ? "border-zinc-300 bg-zinc-50"
+                        : "border-zinc-100"
+                    }`}
+                  >
+                    <div
+                      className={`flex h-8 w-8 items-center justify-center rounded-full text-sm ${
+                        isComplete
+                          ? "bg-black text-white"
+                          : isCurrent
+                          ? "bg-zinc-200 text-black"
+                          : "bg-zinc-100 text-zinc-400"
+                      }`}
+                    >
+                      {isComplete ? "✓" : index + 1}
+                    </div>
 
-        {status === "active" && (
-          <p className="mt-1 text-sm text-indigo-600">
-            Analyzing...
-          </p>
+                    <p
+                      className={
+                        index > currentStep
+                          ? "text-zinc-400"
+                          : "font-medium text-zinc-900"
+                      }
+                    >
+                      {step}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
-      </div>
-    </div>
+
+        {error && (
+          <div className="mt-10 rounded-2xl border border-red-200 bg-red-50 p-5">
+            <p className="font-medium text-red-800">
+              Analysis failed
+            </p>
+
+            <p className="mt-2 text-sm text-red-700">
+              {error}
+            </p>
+
+            <button
+              onClick={() => router.push("/")}
+              className="mt-4 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white"
+            >
+              Try another website
+            </button>
+          </div>
+        )}
+      </section>
+    </main>
   );
 }
